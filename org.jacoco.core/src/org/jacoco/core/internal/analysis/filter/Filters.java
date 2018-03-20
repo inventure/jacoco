@@ -31,7 +31,7 @@ public final class Filters implements IFilter {
 			new TryWithResourcesJavacFilter(), new TryWithResourcesEcjFilter(),
 			new PrivateEmptyNoArgConstructorFilter(),
 			new StringSwitchJavacFilter(), new LombokGeneratedFilter(),
-			new GroovyGeneratedFilter());
+			new GroovyGeneratedFilter(), new ExcludeAnnotationMethodFilter());
 
 	private final IFilter[] filters;
 

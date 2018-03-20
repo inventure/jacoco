@@ -13,9 +13,12 @@ package org.jacoco.core.internal.analysis;
 
 import org.jacoco.core.analysis.IMethodCoverage;
 import org.jacoco.core.internal.analysis.filter.Filters;
+import org.jacoco.core.internal.analysis.filter.classfilter.ClassFilter;
+import org.jacoco.core.internal.analysis.filter.classfilter.ClassFilters;
 import org.jacoco.core.internal.flow.ClassProbesVisitor;
 import org.jacoco.core.internal.flow.MethodProbesVisitor;
 import org.jacoco.core.internal.instr.InstrSupport;
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.FieldVisitor;
 
 /**
@@ -26,6 +29,7 @@ public class ClassAnalyzer extends ClassProbesVisitor {
 	private final ClassCoverageImpl coverage;
 	private final boolean[] probes;
 	private final StringPool stringPool;
+	private final ClassFilter classFilter;
 
 	/**
 	 * Creates a new analyzer that builds coverage data for a class.
@@ -42,6 +46,15 @@ public class ClassAnalyzer extends ClassProbesVisitor {
 		this.coverage = coverage;
 		this.probes = probes;
 		this.stringPool = stringPool;
+		this.classFilter = ClassFilters.ALL;
+		classFilter.reset();
+	}
+
+	@Override
+	public AnnotationVisitor visitAnnotation(final String desc,
+			final boolean visible) {
+		classFilter.visitAnnotation(desc, visible);
+		return super.visitAnnotation(desc, visible);
 	}
 
 	@Override
@@ -51,19 +64,24 @@ public class ClassAnalyzer extends ClassProbesVisitor {
 		coverage.setSignature(stringPool.get(signature));
 		coverage.setSuperName(stringPool.get(superName));
 		coverage.setInterfaces(stringPool.get(interfaces));
+		classFilter.visit(version, access, name, signature, superName,
+				interfaces);
 	}
 
 	@Override
 	public void visitSource(final String source, final String debug) {
 		coverage.setSourceFileName(stringPool.get(source));
+		classFilter.visitSource(source, debug);
 	}
 
 	@Override
 	public MethodProbesVisitor visitMethod(final int access, final String name,
-			final String desc, final String signature, final String[] exceptions) {
+			final String desc, final String signature,
+			final String[] exceptions) {
 
 		InstrSupport.assertNotInstrumented(name, coverage.getName());
 
+		classFilter.visitMethod(access, name, desc, signature, exceptions);
 		return new MethodAnalyzer(coverage.getName(), coverage.getSuperName(),
 				stringPool.get(name), stringPool.get(desc),
 				stringPool.get(signature), probes, Filters.ALL) {
@@ -71,7 +89,9 @@ public class ClassAnalyzer extends ClassProbesVisitor {
 			public void visitEnd() {
 				super.visitEnd();
 				final IMethodCoverage methodCoverage = getCoverage();
-				if (methodCoverage.getInstructionCounter().getTotalCount() > 0) {
+
+				if (methodCoverage.getInstructionCounter().getTotalCount() > 0
+						&& !classFilter.isClassFiltered()) {
 					// Only consider methods that actually contain code
 					coverage.addMethod(methodCoverage);
 				}
@@ -83,12 +103,14 @@ public class ClassAnalyzer extends ClassProbesVisitor {
 	public FieldVisitor visitField(final int access, final String name,
 			final String desc, final String signature, final Object value) {
 		InstrSupport.assertNotInstrumented(name, coverage.getName());
+
+		classFilter.visitField(access, name, desc, signature, value);
 		return super.visitField(access, name, desc, signature, value);
 	}
 
 	@Override
 	public void visitTotalProbeCount(final int count) {
-		// nothing to do
+		classFilter.visitTotalProbeCount(count);
 	}
 
 }
